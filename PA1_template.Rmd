@@ -5,21 +5,121 @@ output:
     keep_md: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 ## Loading and preprocessing the data
 
+First of all, we extract the content of the zip file to the same folder where it is placed. Then we load the resultign csv into R:
+```{r loaddata, cache = TRUE}
+unzip("activity.zip")
+d <- read.csv("activity.csv")
+str(d)
+```
 
+It seems that the data is already in a suitable format for analysis
 
 ## What is mean total number of steps taken per day?
 
+To this end, we aggregate the data by date and plot an histogram of the total number of step
+```{r stepshistogram}
+library(dplyr)
+data_bydate <- group_by(d, date)
+totalSteps <- summarize(data_bydate, totalSteps = sum(steps))
 
+hist(totalSteps$totalSteps, main = "Distribution of Total Number of Steps", xlab = "Total Steps per Day")
+abline(v = mean(totalSteps$totalSteps, na.rm = TRUE),lwd = 2)
+abline(v = median(totalSteps$totalSteps, na.rm = TRUE), lwd = 2)
+```
+
+The mean and the median for this distribution are as following:
+```{r meanmedian}
+cat("Mean: ", mean(totalSteps$totalSteps, na.rm = TRUE))
+cat("Median: ", median(totalSteps$totalSteps, na.rm = TRUE))
+```
+
+As you can see, they are pretty close to each other so it is difficult to tell them apart in the previous graph
 
 ## What is the average daily activity pattern?
 
+To show this pattern, we first aggregate the data by interval and then we average the number of steps by day over them. Then we make a line graph showing the average number of steps across all the days in the dataset over the intervals
+```{r daily}
+data_byinterval <- group_by(d, interval)
+avgPerInterval <- summarize(data_byinterval, avg = mean(steps, na.rm = TRUE))
+plot(avgPerInterval$interval, avgPerInterval$avg, type = "l", main = "Daily Activity", ylab = "Average Number of Steps", xlab = "Interval")
+```
 
+The interval with the maxumim number of steps taken is:
+```{r maxsteps}
+avgPerInterval$interval[which.max(avgPerInterval$avg)]
+```
 
 ## Imputing missing values
 
+For the previous calculations, we didn't have in account the fact that there are several NA values across the dataset. 
+```{r NAs}
+NAs <- sum(is.na(d$steps))
+```
+
+As you can see, the total number of rows with missing values is `r NAs`.
+To deal with this problem, we are going to take a really simple approach; this is to replace any NA value by the mean value for steps over all the dataset, which is `r mean(d$steps, na.rm = TRUE)`
+
+We proceed to fill the NAs values in a copy of the original dataset called dfilled
+```{r fillNAs, cache = TRUE}
+dfilled <- d
+dfilled$steps <- ifelse(is.na(d$steps), mean(d$steps, na.rm = TRUE), d$steps)
+```
+
+```{r NAs2}
+NAsfilled <- sum(is.na(dfilled$steps))
+```
+
+As you can see, the total number of rows with missing values for this dfilled dataset is `r NAsfilled`.
+
+Now, we show the histogram and calculate the mean and median as we did before
+To this end, we aggregate the data by date and plot an histogram of the total number of step
+```{r stepshistogram2}
+library(dplyr)
+data_bydate <- group_by(dfilled, date)
+totalSteps <- summarize(data_bydate, totalSteps = sum(steps))
+
+hist(totalSteps$totalSteps, main = "Distribution of Total Number of Steps", xlab = "Total Steps per Day")
+abline(v = mean(totalSteps$totalSteps, na.rm = TRUE),lwd = 2)
+abline(v = median(totalSteps$totalSteps, na.rm = TRUE), lwd = 2)
+```
+
+The mean and the median for this distribution are as following:
+```{r meanmedian2}
+cat("Mean: ", mean(totalSteps$totalSteps, na.rm = TRUE))
+cat("Median: ", median(totalSteps$totalSteps, na.rm = TRUE))
+```
+
+Now the median and the mean are exactly the same. Overall we can conclude that the influence of the NAs in our dataset was negligible, even when they represent `r NAs/nrow(d)*100`% of the total observations from the original dataset.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+From now on we will use the filled dataset.
+
+To this end, we first create a categorizing variable that will tell us if a certain day is a weekday or belongs to a weekend.
+```{r categorize}
+dfilled <- mutate(dfilled, kindofday = factor(1 * (weekdays(as.Date(d$date)) %in% c("Saturday", "Sunday")), labels = c("weekday", "weekend")))
+```
+
+Now we create a plot with the daily activity but this time splitted by type of day
+```{r daily2}
+library(ggplot2)
+data_byinterval_bykindofday <- group_by(dfilled, interval, kindofday)
+avgPerInterval <- summarize(data_byinterval_bykindofday, avg = mean(steps, na.rm = TRUE))
+
+g <- ggplot(avgPerInterval, aes(interval, avg))
+
+g + geom_line() + 
+    labs(title = "Daily Activity") +
+    labs(x = "Interval", y = "Avg Number of Days") +
+    facet_grid(. ~ kindofday) +
+    theme_bw()
+```
+
+
+
